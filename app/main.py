@@ -94,13 +94,23 @@ with st.sidebar:
     )
 
     top_k = st.slider("Jumlah Hasil:", 1, 20, 10)
+
+    # Tambahan kecil: opsi matching behaviour
+    st.markdown("---")
+    st.markdown("### ⚖️ Kriteria Kecocokan (VSM)")
+    match_mode = st.radio("Tipe kecocokan gejala:", ["AND (semua token)", "Phrase (frasa utuh)"])
     
     st.markdown("---")
     st.markdown("### 📊 Info Sistem")
     st.markdown("**Model Default:**")
     st.markdown("Vector Space Model (TF-IDF)")
     st.metric("Total Penyakit", len(engine.documents))
-    st.metric("Vocabulary", len(engine.vsm.vocab))
+    # guard: jika vsm punya atribut vocab
+    try:
+        vocab_size = len(engine.vsm.vocab)
+    except Exception:
+        vocab_size = "N/A"
+    st.metric("Vocabulary", vocab_size)
 
 
 # ===========================
@@ -129,15 +139,22 @@ if search_btn and query.strip():
         raw_results = engine.search(query, model=selected_model, top_k=top_k)
 
         # ======================================
-        # 🔥 FILTER VSM — hanya tampilkan dokumen
-        # yang mengandung kecocokan di GEJALA
+        # FILTER VSM — match berdasarkan GEJALA
+        # - Dua mode: AND (default) atau Phrase (lebih ketat)
         # ======================================
         if selected_model == "vsm":
+            # preprocess query jadi token (stemmed) dan juga raw cleaned phrase for phrase-check
             query_tokens = preprocess(query, use_stemming=True)
+            # cleaned gejala for phrase matching: lower, remove extra spaces
+            def clean_for_phrase(s):
+                if not s:
+                    return ""
+                return " ".join(s.lower().split())
 
             results = []
             for doc_id, score in raw_results:
 
+                # Lewati skor 0 atau sangat kecil
                 if score <= 0:
                     continue
 
@@ -145,12 +162,23 @@ if search_btn and query.strip():
                 if not doc:
                     continue
 
-                # WAJIB ada token query dalam gejala (bukan deskripsi)
-                if any(token in doc["gejala_tokens"] for token in query_tokens):
-                    results.append((doc_id, score))
+                # ambil gejala tokens (preprocessed saat indexing)
+                gejala_tokens = doc.get("gejala_tokens", [])
+                gejala_text_raw = doc.get("gejala", "")  # original gejala string
+
+                if match_mode == "AND (semua token)":
+                    # hanya jika semua token query ada dalam gejala_tokens
+                    if query_tokens and all(token in gejala_tokens for token in query_tokens):
+                        results.append((doc_id, score))
+
+                else:  # Phrase mode
+                    # cek apakah frasa query (dibersihkan) ada dalam gejala text asli
+                    phrase = clean_for_phrase(query)
+                    if phrase and phrase in clean_for_phrase(gejala_text_raw):
+                        results.append((doc_id, score))
 
         else:
-            # Boolean tidak perlu filter
+            # Boolean tidak perlu filter tambahan
             results = raw_results
 
 
