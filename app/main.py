@@ -130,7 +130,7 @@ if search_btn and query.strip():
 
         # ======================================
         # 🔥 FILTER VSM — hanya tampilkan dokumen
-        # yang benar-benar mengandung token query
+        # yang mengandung kecocokan di GEJALA
         # ======================================
         if selected_model == "vsm":
             query_tokens = preprocess(query, use_stemming=True)
@@ -138,7 +138,6 @@ if search_btn and query.strip():
             results = []
             for doc_id, score in raw_results:
 
-                # Lewati skor 0 atau sangat kecil
                 if score <= 0:
                     continue
 
@@ -146,9 +145,10 @@ if search_btn and query.strip():
                 if not doc:
                     continue
 
-                # WAJIB ada kecocokan token
-                if any(token in doc["tokens"] for token in query_tokens):
+                # WAJIB ada token query dalam gejala (bukan deskripsi)
+                if any(token in doc["gejala_tokens"] for token in query_tokens):
                     results.append((doc_id, score))
+
         else:
             # Boolean tidak perlu filter
             results = raw_results
