@@ -3,10 +3,9 @@ import sys
 import os
 
 # ==========================================================
-# FIX IMPORT — pastikan Python ambil preprocess dari /src/
+# FIX IMPORT — memastikan Python memakai modul di /src/
 # ==========================================================
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
-# (yang asli tetap boleh: sys.path.append(...))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 from search import MedicalSearchEngine
@@ -61,7 +60,6 @@ st.markdown("""
 #  LOAD SEARCH ENGINE
 @st.cache_resource
 def load_engine():
-    """Load dan cache search engine"""
     with st.spinner("🔄 Memuat sistem..."):
         try:
             engine = MedicalSearchEngine(data_dir="data", weighting_scheme="tfidf")
@@ -74,7 +72,9 @@ def load_engine():
 engine = load_engine()
 
 
+# ===========================
 # HEADER
+# ===========================
 st.markdown('<div class="main-title">🏥 Sistem Pencarian Penyakit</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Cari penyakit berdasarkan gejala atau kata kunci</div>', unsafe_allow_html=True)
 
@@ -82,7 +82,9 @@ if engine is None:
     st.stop()
 
 
+# ===========================
 # SIDEBAR
+# ===========================
 with st.sidebar:
     st.markdown("### ⚙️ Pengaturan")
     
@@ -101,7 +103,9 @@ with st.sidebar:
     st.metric("Vocabulary", len(engine.vsm.vocab))
 
 
-# MAIN SEARCH INTERFACE
+# ===========================
+# MAIN SEARCH
+# ===========================
 st.markdown("### 🔍 Pencarian")
 
 query = st.text_input(
@@ -113,26 +117,53 @@ query = st.text_input(
 search_btn = st.button("🔍 Cari Penyakit", type="primary", use_container_width=True)
 
 
-# PROCESS SEARCH
+# ===========================
+# SEARCH PROCESS
+# ===========================
 if search_btn and query.strip():
 
     with st.spinner("🔄 Mencari..."):
 
-        # Tentukan model
         selected_model = "vsm" if model_type == "VSM (TF-IDF)" else "boolean"
 
-        # Eksekusi pencarian
-        results = engine.search(query, model=selected_model, top_k=top_k)
+        raw_results = engine.search(query, model=selected_model, top_k=top_k)
 
-    # Jika kosong
+        # ======================================
+        # 🔥 FILTER VSM — hanya tampilkan dokumen
+        # yang benar-benar mengandung token query
+        # ======================================
+        if selected_model == "vsm":
+            query_tokens = preprocess(query, use_stemming=True)
+
+            results = []
+            for doc_id, score in raw_results:
+
+                # Lewati skor 0 atau sangat kecil
+                if score <= 0:
+                    continue
+
+                doc = next((d for d in engine.documents if d["doc_id"] == doc_id), None)
+                if not doc:
+                    continue
+
+                # WAJIB ada kecocokan token
+                if any(token in doc["tokens"] for token in query_tokens):
+                    results.append((doc_id, score))
+        else:
+            # Boolean tidak perlu filter
+            results = raw_results
+
+
+    # Jika tidak relevan sama sekali
     if not results:
-        st.warning(f"❗ Tidak ada hasil untuk query: **\"{query}\"**")
-        st.info("💡 Tips: Coba gunakan kata kunci lebih umum atau periksa operator Boolean")
+        st.warning(f"❗ Tidak ada hasil relevan untuk query: **\"{query}\"**")
         st.stop()
 
     st.success(f"✅ Ditemukan {len(results)} hasil untuk metode **{model_type}**")
 
+    # ===========================
     # DISPLAY RESULTS
+    # ===========================
     for rank, (doc_id, score) in enumerate(results, 1):
 
         doc_data = next((d for d in engine.documents if d['doc_id'] == doc_id), None)
@@ -173,7 +204,9 @@ elif query.strip():
     st.info("👆 Klik tombol **Cari Penyakit** untuk memulai pencarian")
 
 
+# ===========================
 # FOOTER
+# ===========================
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #999; padding: 1rem;">
