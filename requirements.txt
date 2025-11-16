@@ -1,0 +1,17 @@
+# Core dependencies
+numpy>=1.24.0
+scipy>=1.10.0
+
+# NLP & Text Processing
+Sastrawi>=1.0.1
+
+# Streamlit UI
+streamlit>=1.28.0
+plotly>=5.17.0
+pandas>=2.0.0
+
+# Optional (for visualization)
+matplotlib>=3.7.0
+
+# Testing (optional)
+pytest>=7.4.0
